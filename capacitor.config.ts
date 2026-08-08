@@ -7,17 +7,9 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
   },
-  plugins: {
-    AppShortcuts: {
-      shortcuts: [
-        {
-          id: 'new_reminder',
-          title: 'Neue Erinnerung',
-          description: 'Neue Erinnerung hinzufügen',
-        },
-      ],
-    },
-  },
+  // App shortcuts are defined at runtime in shortcut.service.ts, where they are
+  // registered together with their click listener — keeping a second copy here
+  // would mean two sources of truth for the same shortcut.
 };
 
 export default config;
