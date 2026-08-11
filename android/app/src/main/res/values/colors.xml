@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Brand blue for the native datetime picker dialogs, kept in sync with
+        the ion-color-primary variable in src/theme/variables.css so the
+        native pickers match the rest of the app.
+    -->
+    <color name="pickerAccentLight">#3A5FCD</color>
+    <color name="pickerAccentDark">#5D7EE8</color>
+</resources>
