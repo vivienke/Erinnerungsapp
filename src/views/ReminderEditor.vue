@@ -33,7 +33,7 @@
              the same way: tap to pick, "×" to clear again. They use the same
              stacked-label layout as the text fields so the card reads as one
              consistent form, and the value is tinted to look tappable. -->
-        <ion-item button :detail="!date" @click="openDatePicker">
+        <ion-item class="picker-item" button :detail="!date" @click="openDatePicker">
           <ion-label position="stacked">Datum</ion-label>
           <div class="picker-value" :class="{ 'is-placeholder': !date }">
             {{ formattedDate || 'Kein Datum' }}
@@ -60,7 +60,7 @@
           @ionCancel="datePickerOpen = false"
         ></ion-datetime>
 
-        <ion-item button :detail="!time" @click="openTimePicker">
+        <ion-item class="picker-item" button :detail="!time" @click="openTimePicker">
           <ion-label position="stacked">Uhrzeit</ion-label>
           <div class="picker-value" :class="{ 'is-placeholder': !time }">
             {{ formattedTime || 'Keine Uhrzeit' }}
@@ -109,8 +109,8 @@
           >
             <ion-select-option
               v-for="option in notificationOptions"
-              :key="option.minutes"
-              :value="option.minutes"
+              :key="option.value"
+              :value="option.value"
               :disabled="option.disabled"
             >
               {{ option.label }}
@@ -187,7 +187,7 @@ const text = ref('');
 const date = ref<string | undefined>();
 const time = ref<string | undefined>();
 const description = ref('');
-const notificationOffsetMinutes = ref<number | null>(0);
+const notificationOffsetMinutes = ref<number | 'none'>(0);
 const reminderId = ref('');
 const datePickerOpen = ref(false);
 const timePickerOpen = ref(false);
@@ -218,7 +218,9 @@ const loadReminder = async () => {
       date.value = existing.date;
       time.value = existing.time;
       description.value = existing.description ?? '';
-      notificationOffsetMinutes.value = existing.notificationOffsetMinutes ?? 0;
+      notificationOffsetMinutes.value = existing.notificationOffsetMinutes === null
+        ? 'none'
+        : existing.notificationOffsetMinutes ?? 0;
       done.value = existing.done ?? false;
     } else {
       router.replace('/home');
@@ -345,7 +347,7 @@ const notificationInterfaceOptions = computed(() => ({
 
 const notificationOptions = computed(() => {
   const now = validationNow.value;
-  return [
+  const timedOptions = [
     { minutes: 0, prefix: 'Zum Termin' },
     { minutes: 10, prefix: '10 Minuten früher' },
     { minutes: 60, prefix: '1 Stunde früher' },
@@ -354,15 +356,19 @@ const notificationOptions = computed(() => {
     const moment = notificationDate(option.minutes);
     const disabled = !moment || moment <= now;
     return {
-      minutes: option.minutes,
+      value: option.minutes as number | 'none',
       disabled,
       label: `${option.prefix} · ${formatMoment(moment)}${disabled ? ' · nicht mehr möglich' : ''}`,
     };
   });
+  return [
+    { value: 'none' as const, disabled: false, label: 'Keine' },
+    ...timedOptions,
+  ];
 });
 
 const notificationStatus = computed(() => {
-  if (!date.value || !time.value || done.value || notificationOffsetMinutes.value === null) {
+  if (!date.value || !time.value || done.value || notificationOffsetMinutes.value === 'none') {
     return null;
   }
 
@@ -433,7 +439,9 @@ const saveReminder = async () => {
     date: normalizeDate(date.value),
     time: normalizeTime(time.value),
     description: description.value.trim(),
-    notificationOffsetMinutes: notificationOffsetMinutes.value ?? undefined,
+    notificationOffsetMinutes: notificationOffsetMinutes.value === 'none'
+      ? null
+      : notificationOffsetMinutes.value,
     // The editor is now authoritative for the status: switching back to "Offen"
     // lets the service schedule a notification again, marking it done cancels it.
     done: done.value,
@@ -450,7 +458,11 @@ const saveReminder = async () => {
     // means the computed notification time already passed. Say so instead of
     // letting the user believe a reminder is armed when it never fires.
     const expectedNotification =
-      Capacitor.getPlatform() !== 'web' && !reminder.done && !!reminder.date && !!reminder.time;
+      Capacitor.getPlatform() !== 'web' &&
+      !reminder.done &&
+      !!reminder.date &&
+      !!reminder.time &&
+      reminder.notificationOffsetMinutes !== null;
     if (expectedNotification && !saved.notificationId) {
       showToast('Gespeichert, aber der Benachrichtigungszeitpunkt liegt bereits in der Vergangenheit', 'danger');
     } else {
@@ -520,5 +532,14 @@ ion-label.label-stacked {
    instead of shouting an instruction in blue. */
 .picker-value.is-placeholder {
   color: var(--ion-color-medium);
+}
+
+/* Ionic's stacked labels make the end slot look slightly top-heavy. Keep both
+   the detail chevron and the clear action centred against the complete row. */
+.picker-item::part(detail-icon),
+.picker-item ion-button[slot='end'] {
+  align-self: center;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 </style>

@@ -122,6 +122,20 @@ describe('Benachrichtigung planen', () => {
     expect(scheduled).toHaveLength(0);
     expect(saved.notificationId).toBeUndefined();
   });
+
+  it('speichert auch einen vergangenen Termin, wenn „Keine“ gewählt wurde', async () => {
+    const saved = await addOrUpdateReminder({
+      id: 'r1',
+      text: 'Ohne Benachrichtigung',
+      date: past,
+      time: '10:00',
+      notificationOffsetMinutes: null,
+    });
+
+    expect(scheduled).toHaveLength(0);
+    expect(saved.notificationId).toBeUndefined();
+    expect(saved.notificationOffsetMinutes).toBeNull();
+  });
 });
 
 describe('Bearbeiten', () => {
@@ -167,6 +181,24 @@ describe('Bearbeiten', () => {
       text: 'Test',
       date: undefined,
       time: '10:00',
+    });
+
+    expect(cancelled).toContain(first.notificationId);
+    expect(scheduled).toHaveLength(0);
+    expect(saved.notificationId).toBeUndefined();
+  });
+
+  it('storniert die bestehende Benachrichtigung, wenn „Keine“ gewählt wird', async () => {
+    const first = await addOrUpdateReminder({ id: 'r1', text: 'Test', date: future, time: '10:00' });
+    scheduled.length = 0;
+    cancelled.length = 0;
+
+    const saved = await addOrUpdateReminder({
+      id: 'r1',
+      text: 'Test',
+      date: future,
+      time: '10:00',
+      notificationOffsetMinutes: null,
     });
 
     expect(cancelled).toContain(first.notificationId);

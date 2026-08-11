@@ -101,7 +101,7 @@ interface Reminder {
   time?: string;
   description?: string;
   done?: boolean;
-  notificationOffsetMinutes?: number;
+  notificationOffsetMinutes?: number | null;
 }
 
 const router = useRouter();
@@ -151,7 +151,10 @@ const formatTimeString = (value?: string) => {
   return match ? `${match[1]}:${match[2]}` : value.replace('T', ' ').split('.')[0];
 };
 
-const notificationLabel = (minutes: number | undefined, date: string, time: string) => {
+const notificationLabel = (minutes: number | null | undefined, date: string, time: string) => {
+  if (minutes === null) {
+    return 'Keine';
+  }
   // An absent offset means the reminder was stored before the field existed;
   // scheduling then falls back to "at the reminder time".
   const offset = minutes ?? 0;

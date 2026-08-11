@@ -144,28 +144,38 @@
               {{ group.items.length }}
             </span>
           </div>
-          <ion-list>
-            <ion-item-sliding v-for="reminder in group.items" :key="reminder.id">
-              <ion-item :class="{ done: reminder.done }">
-                <ion-checkbox slot="start" :checked="reminder.done" @ionChange="toggleDone(reminder)"></ion-checkbox>
-                <ion-label class="reminder-content" @click="viewReminder(reminder.id)">
-                  <h3 class="reminder-title">{{ reminder.text }}</h3>
-                  <p v-if="reminder.date || reminder.time" class="reminder-date">
-                    <ion-icon :icon="timeOutline" aria-hidden="true"></ion-icon>
-                    {{ formatDateTime(reminder.date, reminder.time) }}
-                  </p>
-                </ion-label>
-              </ion-item>
-              <ion-item-options side="end">
-                <ion-item-option color="primary" @click="editReminder(reminder.id)">
-                  <ion-icon slot="icon-only" :icon="create"></ion-icon>
-                </ion-item-option>
-                <ion-item-option color="danger" @click="deleteItem(reminder.id)">
-                  <ion-icon slot="icon-only" :icon="trash"></ion-icon>
-                </ion-item-option>
-              </ion-item-options>
-            </ion-item-sliding>
-          </ion-list>
+          <div
+            v-for="subgroup in group.subgroups"
+            :key="subgroup.key"
+            class="reminder-subgroup"
+          >
+            <div v-if="subgroup.label" class="weekday-heading">
+              <h3>{{ subgroup.label }}</h3>
+              <span>{{ subgroup.items.length }}</span>
+            </div>
+            <ion-list>
+              <ion-item-sliding v-for="reminder in subgroup.items" :key="reminder.id">
+                <ion-item :class="{ done: reminder.done }">
+                  <ion-checkbox slot="start" :checked="reminder.done" @ionChange="toggleDone(reminder)"></ion-checkbox>
+                  <ion-label class="reminder-content" @click="viewReminder(reminder.id)">
+                    <h3 class="reminder-title">{{ reminder.text }}</h3>
+                    <p v-if="reminder.date || reminder.time" class="reminder-date">
+                      <ion-icon :icon="timeOutline" aria-hidden="true"></ion-icon>
+                      {{ formatDateTime(reminder.date, reminder.time) }}
+                    </p>
+                  </ion-label>
+                </ion-item>
+                <ion-item-options side="end">
+                  <ion-item-option color="primary" @click="editReminder(reminder.id)">
+                    <ion-icon slot="icon-only" :icon="create"></ion-icon>
+                  </ion-item-option>
+                  <ion-item-option color="danger" @click="deleteItem(reminder.id)">
+                    <ion-icon slot="icon-only" :icon="trash"></ion-icon>
+                  </ion-item-option>
+                </ion-item-options>
+              </ion-item-sliding>
+            </ion-list>
+          </div>
         </section>
       </template>
       <div v-else class="empty-state ion-text-center ion-padding-top">
@@ -528,12 +538,46 @@ const groupedReminders = computed(() => {
       custom: { label: 'Individueller Zeitraum', icon: calendarOutline, tone: 'neutral' },
     };
     const meta = groupMeta[dateFilter.value];
+    const items = [...filteredReminders.value].sort(compareRemindersChronologically);
+    const subgroups: Array<{ key: string; label?: string; items: Reminder[] }> = [];
+
+    if (dateFilter.value === 'week') {
+      for (const reminder of items) {
+        const reminderDate = parseDate(reminder.date);
+        if (!reminderDate) {
+          continue;
+        }
+        const key = [
+          reminderDate.getFullYear(),
+          String(reminderDate.getMonth() + 1).padStart(2, '0'),
+          String(reminderDate.getDate()).padStart(2, '0'),
+        ].join('-');
+        let subgroup = subgroups.find((candidate) => candidate.key === key);
+        if (!subgroup) {
+          subgroup = {
+            key,
+            label: new Intl.DateTimeFormat('de-DE', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            }).format(reminderDate),
+            items: [],
+          };
+          subgroups.push(subgroup);
+        }
+        subgroup.items.push(reminder);
+      }
+    } else {
+      subgroups.push({ key: dateFilter.value, items });
+    }
+
     return [{
       key: dateFilter.value,
       label: meta.label,
       icon: meta.icon,
       tone: meta.tone,
-      items: [...filteredReminders.value].sort(compareRemindersChronologically),
+      items,
+      subgroups,
     }];
   }
 
@@ -573,7 +617,12 @@ const groupedReminders = computed(() => {
     bucket.items.sort(compareRemindersChronologically);
   }
 
-  return buckets.filter((bucket) => bucket.items.length > 0);
+  return buckets
+    .filter((bucket) => bucket.items.length > 0)
+    .map((bucket) => ({
+      ...bucket,
+      subgroups: [{ key: bucket.key, label: undefined, items: bucket.items }],
+    }));
 });
 
 const reminderTimeInMinutes = (value?: string) => {
@@ -846,6 +895,31 @@ watch(route, () => {
 .reminder-group ion-list {
   margin-bottom: 0;
   border: 1px solid color-mix(in srgb, var(--group-color) 12%, transparent);
+}
+
+.reminder-subgroup + .reminder-subgroup {
+  margin-top: 0.85rem;
+}
+
+.weekday-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0.55rem 0.38rem;
+  color: var(--group-color);
+}
+
+.weekday-heading h3 {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.weekday-heading span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .reminder-content {

@@ -10,7 +10,8 @@ export interface Reminder {
   description?: string;
   done?: boolean;
   notificationId?: number;
-  notificationOffsetMinutes?: number;
+  /** `null` explicitly disables notifications; `undefined` keeps legacy "at time" behaviour. */
+  notificationOffsetMinutes?: number | null;
 }
 
 const STORAGE_KEY = 'reminders';
@@ -251,6 +252,10 @@ async function scheduleNotificationForReminder(reminder: Reminder): Promise<numb
   }
 
   if (reminder.done) {
+    return undefined;
+  }
+
+  if (reminder.notificationOffsetMinutes === null) {
     return undefined;
   }
 
