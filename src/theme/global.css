@@ -57,6 +57,13 @@ ion-item-option {
   text-transform: none;
 }
 
+/* The alert wrapper receives programmatic focus when it opens. Chromium draws
+   an orange browser outline around that wrapper unless it is suppressed; the
+   actionable buttons keep their own keyboard focus indication. */
+.notification-permission-alert .alert-wrapper {
+  outline: none;
+}
+
 /* ---------- Segments ---------- */
 
 ion-segment-button {

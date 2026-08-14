@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The notification path is skipped entirely on the web platform, so it cannot be
- * exercised in a browser preview. These tests pretend to run on Android and
- * record what the Local Notifications plugin is asked to do, which makes the
- * scheduling/cancelling behaviour verifiable.
- */
+/** These tests pretend to run on Android and record the plugin calls. */
 
 const store = new Map<string, string>();
 const scheduled: Array<Record<string, unknown>> = [];
@@ -45,9 +40,13 @@ vi.mock('@capacitor/local-notifications', () => ({
   },
 }));
 
-const { addOrUpdateReminder, loadReminders, removeReminder, getReminder } = await import(
-  '@/services/reminder.service'
-);
+const {
+  addOrUpdateReminder,
+  getReminder,
+  hasRemindersNeedingNotificationPermission,
+  loadReminders,
+  removeReminder,
+} = await import('@/services/reminder.service');
 
 /** "YYYY-MM-DD" a given number of days from today. */
 const dayOffset = (days: number) => {
@@ -135,6 +134,34 @@ describe('Benachrichtigung planen', () => {
     expect(scheduled).toHaveLength(0);
     expect(saved.notificationId).toBeUndefined();
     expect(saved.notificationOffsetMinutes).toBeNull();
+  });
+});
+
+describe('Berechtigungsbedarf', () => {
+  it('besteht nur für offene Erinnerungen mit einem zukünftigen Benachrichtigungszeitpunkt', async () => {
+    await addOrUpdateReminder({ id: 'future', text: 'Zukünftig', date: future, time: '10:00' });
+
+    expect(await hasRemindersNeedingNotificationPermission()).toBe(true);
+  });
+
+  it('besteht nicht bei „Keine“, erledigten oder vergangenen Erinnerungen', async () => {
+    await addOrUpdateReminder({
+      id: 'none',
+      text: 'Keine',
+      date: future,
+      time: '10:00',
+      notificationOffsetMinutes: null,
+    });
+    await addOrUpdateReminder({
+      id: 'done',
+      text: 'Erledigt',
+      date: future,
+      time: '10:00',
+      done: true,
+    });
+    await addOrUpdateReminder({ id: 'past', text: 'Vergangen', date: past, time: '10:00' });
+
+    expect(await hasRemindersNeedingNotificationPermission()).toBe(false);
   });
 });
 

@@ -153,7 +153,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { Capacitor } from '@capacitor/core';
 import {
   IonBackButton,
   IonButton,
@@ -177,7 +176,12 @@ import {
   toastController,
 } from '@ionic/vue';
 import { alertCircleOutline, checkmark, checkmarkCircleOutline, close } from 'ionicons/icons';
-import { addOrUpdateReminder, getReminder } from '@/services/reminder.service';
+import {
+  addOrUpdateReminder,
+  getReminder,
+  reminderNeedsNotificationPermission,
+} from '@/services/reminder.service';
+import { requestNotificationPermissionWithFeedback } from '@/services/notification-permission.service';
 import { isNativePickerAvailable, pickDate, pickTime } from '@/services/datetime.service';
 
 const router = useRouter();
@@ -447,6 +451,16 @@ const saveReminder = async () => {
     done: done.value,
   };
 
+  // The initial app launch no longer asks without a reason. If this reminder
+  // needs a notification, request permission immediately before it is saved.
+  // Choosing "Keine", marking it done, or omitting date/time skips this path.
+  if (reminderNeedsNotificationPermission(reminder, validationNow.value)) {
+    const permission = await requestNotificationPermissionWithFeedback(true);
+    if (permission !== 'granted') {
+      return;
+    }
+  }
+
   try {
     const saved = await addOrUpdateReminder(reminder);
     window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: saved.id }));
@@ -458,7 +472,6 @@ const saveReminder = async () => {
     // means the computed notification time already passed. Say so instead of
     // letting the user believe a reminder is armed when it never fires.
     const expectedNotification =
-      Capacitor.getPlatform() !== 'web' &&
       !reminder.done &&
       !!reminder.date &&
       !!reminder.time &&

@@ -34,14 +34,21 @@ export type NotificationPermission = 'granted' | 'denied' | 'unavailable';
  * that it now has to be re-enabled in the system settings.
  */
 export async function ensureNotificationPermission(): Promise<NotificationPermission> {
-  if (Capacitor.getPlatform() === 'web') {
+  let status: Awaited<ReturnType<typeof LocalNotifications.checkPermissions>>;
+  try {
+    status = await LocalNotifications.checkPermissions();
+  } catch (error) {
+    console.warn('Notification permission is not available on this platform.', error);
     return 'unavailable';
   }
 
-  let status = await LocalNotifications.checkPermissions();
-
   if (status.display === 'prompt' || status.display === 'prompt-with-rationale') {
-    status = await LocalNotifications.requestPermissions();
+    try {
+      status = await LocalNotifications.requestPermissions();
+    } catch (error) {
+      console.warn('Notification permission could not be requested.', error);
+      return 'unavailable';
+    }
   }
 
   if (status.display !== 'granted') {
@@ -76,29 +83,27 @@ export interface ReminderNotificationHandlers {
 }
 
 export async function initializeReminderService(handlers: ReminderNotificationHandlers = {}) {
-  if (Capacitor.getPlatform() === 'web') {
-    return;
+  if (Capacitor.getPlatform() !== 'web') {
+    await LocalNotifications.createChannel({
+      id: CHANNEL_ID,
+      name: 'Erinnerungen',
+      importance: 5,
+    });
+
+    await LocalNotifications.registerActionTypes({
+      types: [
+        {
+          id: ACTION_TYPE_ID,
+          actions: [
+            {
+              id: 'COMPLETE',
+              title: 'Erledigt',
+            },
+          ],
+        },
+      ],
+    });
   }
-
-  await LocalNotifications.createChannel({
-    id: CHANNEL_ID,
-    name: 'Erinnerungen',
-    importance: 5,
-  });
-
-  await LocalNotifications.registerActionTypes({
-    types: [
-      {
-        id: ACTION_TYPE_ID,
-        actions: [
-          {
-            id: 'COMPLETE',
-            title: 'Erledigt',
-          },
-        ],
-      },
-    ],
-  });
 
   if (!listenersRegistered) {
     LocalNotifications.addListener('localNotificationActionPerformed', async (action) => {
@@ -246,21 +251,8 @@ function parseReminderDateTime(date: string, time?: string) {
   return new Date(year, month - 1, day, hour, minute, 0);
 }
 
-async function scheduleNotificationForReminder(reminder: Reminder): Promise<number | undefined> {
-  if (Capacitor.getPlatform() === 'web') {
-    return undefined;
-  }
-
-  if (reminder.done) {
-    return undefined;
-  }
-
-  if (reminder.notificationOffsetMinutes === null) {
-    return undefined;
-  }
-
-  // Requirement: a notification must be scheduled whenever both a date AND a time are set.
-  if (!reminder.date || !reminder.time) {
+function notificationScheduleAt(reminder: Reminder): Date | undefined {
+  if (reminder.done || reminder.notificationOffsetMinutes === null || !reminder.date || !reminder.time) {
     return undefined;
   }
 
@@ -271,7 +263,26 @@ async function scheduleNotificationForReminder(reminder: Reminder): Promise<numb
 
   const offsetMinutes = reminder.notificationOffsetMinutes ?? 0;
   const scheduleAt = new Date(eventDate.getTime() - offsetMinutes * 60 * 1000);
-  if (Number.isNaN(scheduleAt.getTime())) {
+  return Number.isNaN(scheduleAt.getTime()) ? undefined : scheduleAt;
+}
+
+/** Whether this reminder still needs permission in order to deliver a notification. */
+export function reminderNeedsNotificationPermission(reminder: Reminder, now = new Date()): boolean {
+  const scheduleAt = notificationScheduleAt(reminder);
+  return !!scheduleAt && scheduleAt.getTime() > now.getTime();
+}
+
+/** Used at app startup so an empty or notification-free app never asks unnecessarily. */
+export async function hasRemindersNeedingNotificationPermission(): Promise<boolean> {
+  const reminders = await loadReminders();
+  const now = new Date();
+  return reminders.some((reminder) => reminderNeedsNotificationPermission(reminder, now));
+}
+
+async function scheduleNotificationForReminder(reminder: Reminder): Promise<number | undefined> {
+  const offsetMinutes = reminder.notificationOffsetMinutes ?? 0;
+  const scheduleAt = notificationScheduleAt(reminder);
+  if (!scheduleAt) {
     return undefined;
   }
 
@@ -328,9 +339,5 @@ function notificationIdFor(reminderId: string): number {
 }
 
 async function cancelNotification(notificationId: number): Promise<void> {
-  if (Capacitor.getPlatform() === 'web') {
-    return;
-  }
-
   await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 }
