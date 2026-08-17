@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <ion-header>
+    <ion-header :translucent="true">
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-back-button default-href="/home"></ion-back-button>
@@ -9,15 +9,20 @@
       </ion-toolbar>
     </ion-header>
 
-    <ion-content class="ion-padding">
+    <ion-content class="ion-padding" :fullscreen="true">
       <ion-card v-if="reminder">
+        <!-- Date and time already have their own rows below, so repeating them
+             as a subtitle here was duplication. -->
         <ion-card-header>
           <ion-card-title>{{ reminder.text }}</ion-card-title>
-          <ion-card-subtitle v-if="reminder.date || reminder.time">
-            {{ formatDateTime(reminder.date, reminder.time) }}
-          </ion-card-subtitle>
         </ion-card-header>
         <ion-card-content>
+          <ion-item lines="none">
+            <ion-label>
+              <h3>Status</h3>
+              <p>{{ reminder.done ? 'Erledigt' : 'Offen' }}</p>
+            </ion-label>
+          </ion-item>
           <ion-item lines="none">
             <ion-label>
               <h3>Datum</h3>
@@ -27,38 +32,37 @@
           <ion-item lines="none">
             <ion-label>
               <h3>Uhrzeit</h3>
-              <p>{{ formatTimeString(reminder.time) || 'Keine Uhrzeit' }}</p>
+              <p>{{ reminder.time ? `${formatTimeString(reminder.time)} Uhr` : 'Keine Uhrzeit' }}</p>
             </ion-label>
           </ion-item>
           <ion-item lines="none">
             <ion-label>
               <h3>Beschreibung</h3>
-              <p>{{ reminder.description ?? 'Keine Beschreibung' }}</p>
+              <!-- The editor stores a trimmed string, so an omitted description
+                   arrives as "" — which ?? would let through as a blank line. -->
+              <p>{{ reminder.description || 'Keine Beschreibung' }}</p>
             </ion-label>
           </ion-item>
           <ion-item lines="none">
             <ion-label>
               <h3>Benachrichtigung</h3>
-              <p>{{ reminder.notificationOffsetMinutes !== undefined ? notificationLabel(reminder.notificationOffsetMinutes) : 'Keine' }}</p>
-            </ion-label>
-          </ion-item>
-          <ion-item lines="none">
-            <ion-label>
-              <h3>Status</h3>
-              <p>{{ reminder.done ? 'Erledigt' : 'Offen' }}</p>
+              <!-- Without both a date and a time nothing is ever scheduled, so
+                   showing a stored offset here would claim a notification that
+                   does not exist. -->
+              <p>{{ reminder.date && reminder.time ? notificationLabel(reminder.notificationOffsetMinutes, reminder.date, reminder.time) : 'Keine' }}</p>
             </ion-label>
           </ion-item>
         </ion-card-content>
-        <ion-footer class="detail-actions">
-          <ion-toolbar>
-            <ion-buttons slot="start">
-              <ion-button color="danger" fill="outline" @click="deleteReminder">Löschen</ion-button>
-            </ion-buttons>
-            <ion-buttons slot="end">
-              <ion-button color="primary" @click="editReminder(reminder.id)">Bearbeiten</ion-button>
-            </ion-buttons>
-          </ion-toolbar>
-        </ion-footer>
+        <div class="detail-actions">
+          <ion-button expand="block" color="primary" @click="editReminder(reminder.id)">
+            <ion-icon slot="start" :icon="create"></ion-icon>
+            Bearbeiten
+          </ion-button>
+          <ion-button expand="block" color="danger" fill="outline" @click="deleteReminder">
+            <ion-icon slot="start" :icon="trash"></ion-icon>
+            Löschen
+          </ion-button>
+        </div>
       </ion-card>
       <div v-else class="ion-text-center ion-padding-top">
         <p>Erinnerung nicht gefunden.</p>
@@ -77,16 +81,17 @@ import {
   IonCard,
   IonCardContent,
   IonCardHeader,
-  IonCardSubtitle,
   IonCardTitle,
   IonContent,
-  IonFooter,
   IonHeader,
+  IonIcon,
   IonItem,
   IonLabel,
   IonPage,
   IonToolbar,
+  onIonViewWillEnter,
 } from '@ionic/vue';
+import { create, trash } from 'ionicons/icons';
 import { getReminder, removeReminder } from '@/services/reminder.service';
 
 interface Reminder {
@@ -96,7 +101,7 @@ interface Reminder {
   time?: string;
   description?: string;
   done?: boolean;
-  notificationOffsetMinutes?: number;
+  notificationOffsetMinutes?: number | null;
 }
 
 const router = useRouter();
@@ -129,8 +134,9 @@ const formatDateString = (value?: string) => {
     return value.replace('T', ' ').split('.')[0];
   }
   return new Intl.DateTimeFormat('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
     year: 'numeric',
   }).format(date);
 };
@@ -139,25 +145,50 @@ const formatTimeString = (value?: string) => {
   if (!value) {
     return '';
   }
-  const match = value.match(/^(\d{2}:\d{2})/);
-  return match ? match[1] : value.replace('T', ' ').split('.')[0];
+  // Not anchored to the start: handles both a clean "HH:mm" and a full ISO
+  // datetime string like "2026-08-07T15:03:00" (older/unnormalized data).
+  const match = value.match(/(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : value.replace('T', ' ').split('.')[0];
 };
 
-const formatDateTime = (date?: string, time?: string) => {
-  if (time) {
-    return formatTimeString(time);
+const notificationLabel = (minutes: number | null | undefined, date: string, time: string) => {
+  if (minutes === null) {
+    return 'Keine';
   }
-  if (date) {
-    return formatDateString(date);
+  // An absent offset means the reminder was stored before the field existed;
+  // scheduling then falls back to "at the reminder time".
+  const offset = minutes ?? 0;
+  const parsedDate = parseDate(date);
+  const parsedTime = formatTimeString(time).match(/^(\d{2}):(\d{2})$/);
+  if (!parsedDate || !parsedTime) {
+    return offset === 0 ? 'Zum Zeitpunkt' : `${offset} Minuten vorher`;
   }
-  return '';
-};
 
-const notificationLabel = (minutes: number) => {
-  if (minutes === 10) return '10 Minuten davor';
-  if (minutes === 60) return '1 Stunde davor';
-  if (minutes === 1440) return '1 Tag davor';
-  return `${minutes} Minuten davor`;
+  const moment = new Date(
+    parsedDate.getFullYear(),
+    parsedDate.getMonth(),
+    parsedDate.getDate(),
+    Number(parsedTime[1]),
+    Number(parsedTime[2]),
+  );
+  moment.setMinutes(moment.getMinutes() - offset);
+  const formattedDay = new Intl.DateTimeFormat('de-DE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(moment);
+  const formattedMomentTime = new Intl.DateTimeFormat('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(moment);
+  const offsetLabel = offset === 0
+    ? 'Zum Zeitpunkt'
+    : offset === 60
+      ? '1 Stunde vorher'
+      : offset === 1440
+        ? '1 Tag vorher'
+        : `${offset} Minuten vorher`;
+  return `${offsetLabel} · ${formattedDay}, ${formattedMomentTime} Uhr`;
 };
 
 const editReminder = (id: string) => {
@@ -173,14 +204,33 @@ const deleteReminder = async () => {
   router.replace('/home');
 };
 
-onMounted(async () => {
+const loadReminder = async () => {
   const id = route.params.id as string;
-  reminder.value = id ? await getReminder(id) ?? null : null;
-});
+  reminder.value = id ? (await getReminder(id)) ?? null : null;
+};
+
+onMounted(loadReminder);
+
+// Ionic keeps visited pages in its navigation stack, so returning to this view
+// reuses the existing instance and onMounted does not run again — which meant a
+// reminder edited in between was still shown with its old date and time.
+// onIonViewWillEnter fires on every entry, including restores from the stack.
+onIonViewWillEnter(loadReminder);
 </script>
 
 <style scoped>
 ion-card {
   min-height: 60vh;
+}
+
+.detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+}
+
+.detail-actions ion-button {
+  margin: 0;
 }
 </style>

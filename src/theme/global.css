@@ -1,0 +1,106 @@
+/**
+ * App-wide visual polish on top of Ionic's defaults.
+ * Only uses Ionic's official CSS custom properties / shadow parts and plain
+ * element selectors — no external fonts or assets, so it stays fully offline-safe.
+ */
+
+:root {
+  /* A refined native system-font stack instead of Ionic's default — same
+     "no download needed" fonts the OS already ships, just tuned explicitly
+     for a slightly more premium look (used consistently across weights). */
+  --ion-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ion-default-font: var(--ion-font-family);
+}
+
+/* ---------- Typography ---------- */
+
+/* Headings consistently in the brand blue, everywhere a title appears
+   (page headers, the reminder detail card, the custom-filter modal). */
+ion-title,
+ion-card-title {
+  color: var(--ion-color-primary);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+ion-item h2 {
+  font-weight: 600;
+}
+
+ion-list-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ion-color-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- Buttons ---------- */
+
+/* Material mode uppercases button labels by default ("SPEICHERN") — that's
+   the single biggest "unfinished prototype" signal, so it's turned off. */
+ion-button {
+  --border-radius: 12px;
+  --box-shadow: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+ion-fab-button {
+  --border-radius: 16px;
+  --box-shadow: 0 8px 20px rgba(var(--ion-color-primary-rgb), 0.35);
+}
+
+ion-item-option {
+  font-weight: 600;
+  text-transform: none;
+}
+
+/* The alert wrapper receives programmatic focus when it opens. Chromium draws
+   an orange browser outline around that wrapper unless it is suppressed; the
+   actionable buttons keep their own keyboard focus indication. */
+.notification-permission-alert .alert-wrapper {
+  outline: none;
+}
+
+/* ---------- Segments ---------- */
+
+ion-segment-button {
+  --border-radius: 10px;
+  font-weight: 500;
+  text-transform: none;
+  min-height: 36px;
+}
+
+/* ---------- Lists and cards share one "elevated card" language ---------- */
+
+ion-list,
+ion-card {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
+}
+
+ion-card {
+  margin-inline: 0;
+}
+
+/* List headers sit visually outside their following card, like iOS section titles. */
+ion-list-header {
+  box-shadow: none;
+  margin: 1.25rem 0.25rem 0.5rem;
+  --min-height: 0;
+}
+
+ion-item {
+  --padding-start: 16px;
+  --inner-padding-end: 16px;
+}
+
+/* ---------- Toolbars ---------- */
+
+ion-toolbar {
+  --border-color: transparent;
+}
